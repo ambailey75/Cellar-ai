@@ -24,3 +24,7 @@ npm-debug.log*
 
 .vercel
 .env*
+!.env*.example
+
+/lib/generated/prisma
+*.tsbuildinfo

@@ -1,0 +1,165 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model User {
+  id          String   @id @default(cuid())
+  supabaseId  String   @unique
+  email       String   @unique
+  name        String?
+  preferences Json     @default("{}")
+  createdAt   DateTime @default(now())
+
+  wines         Wine[]
+  alerts        CellarAlert[]
+  conversations AiConversation[]
+  imports       Import[]
+
+  @@map("users")
+}
+
+model Wine {
+  id              String    @id @default(cuid())
+  userId          String
+  producer        String
+  wineName        String
+  vintage         Int?
+  country         String?
+  region          String?
+  subRegion       String?
+  classification  String?
+  varietal        String?
+  format          String?
+  quantity        Int       @default(1)
+  purchasePrice   Decimal?  @db.Decimal(10, 2)
+  purchaseDate    DateTime?
+  vendor          String?
+  storageLocation String?
+  notes           String?
+  labelPhotoUrl   String?
+  importId        String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  user       User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  import     Import?         @relation(fields: [importId], references: [id])
+  enrichment WineEnrichment?
+  alerts     CellarAlert[]
+  importRows ImportRow[]
+
+  @@index([userId])
+  @@index([importId])
+  @@map("wines")
+}
+
+model WineEnrichment {
+  id                 String    @id @default(cuid())
+  wineId             String    @unique
+  criticScores       Json?
+  currentMarketPrice Decimal?  @db.Decimal(10, 2)
+  drinkWindowStart   Int?
+  drinkWindowEnd     Int?
+  peakWindowStart    Int?
+  peakWindowEnd      Int?
+  lastEnrichedAt     DateTime?
+
+  wine Wine @relation(fields: [wineId], references: [id], onDelete: Cascade)
+
+  @@map("wine_enrichments")
+}
+
+model CellarAlert {
+  id          String    @id @default(cuid())
+  userId      String
+  wineId      String
+  alertType   String
+  triggerDate DateTime
+  deliveredAt DateTime?
+  dismissedAt DateTime?
+  createdAt   DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  wine Wine @relation(fields: [wineId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([wineId])
+  @@map("cellar_alerts")
+}
+
+model AiConversation {
+  id        String   @id @default(cuid())
+  userId    String
+  messages  Json     @default("[]")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("ai_conversations")
+}
+
+enum ImportSourceType {
+  EXCEL
+  CSV
+  PDF
+  IMAGE
+}
+
+enum ImportStatus {
+  PENDING
+  PROCESSING
+  REVIEW
+  COMPLETE
+  FAILED
+}
+
+model Import {
+  id               String           @id @default(cuid())
+  userId           String
+  sourceType       ImportSourceType
+  originalFilename String
+  storagePath      String
+  status           ImportStatus     @default(PENDING)
+  recordCount      Int              @default(0)
+  skippedCount     Int              @default(0)
+  createdAt        DateTime         @default(now())
+  completedAt      DateTime?
+
+  user  User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  wines Wine[]
+  rows  ImportRow[]
+
+  @@index([userId])
+  @@map("imports")
+}
+
+enum ImportRowStatus {
+  PENDING
+  CONFIRMED
+  SKIPPED
+}
+
+model ImportRow {
+  id               String          @id @default(cuid())
+  importId         String
+  rawData          Json
+  mappedData       Json?
+  confidenceScores Json?
+  status           ImportRowStatus @default(PENDING)
+  wineId           String?
+  reviewNotes      String?
+
+  import Import @relation(fields: [importId], references: [id], onDelete: Cascade)
+  wine   Wine?   @relation(fields: [wineId], references: [id])
+
+  @@index([importId])
+  @@index([wineId])
+  @@map("import_rows")
+}
